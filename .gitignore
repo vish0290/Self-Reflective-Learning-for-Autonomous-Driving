@@ -1,0 +1,5 @@
+*env
+data
+.DS_Store
+.vscode
+.idea
