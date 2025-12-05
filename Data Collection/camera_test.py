@@ -75,7 +75,7 @@ def main():
     camera_location = carla.Location(
         x=vehicle_extent.x + 0.5,    # Slightly forward from the vehicle's front
         y=0.0,                       # Centered horizontally on the vehicle
-        z=vehicle_extent.z + 0.0     # Elevated above the roof
+        z=vehicle_extent.z + 1.0     # Elevated above the roof
     )
 
     # Adjust camera rotation to face forward
