@@ -66,8 +66,8 @@ def main():
     camera_bp = blueprint_library.find('sensor.camera.rgb')
 
     # Adjust camera attributes (optional)
-    camera_bp.set_attribute('image_size_x', '1920')
-    camera_bp.set_attribute('image_size_y', '1080')
+    camera_bp.set_attribute('image_size_x', '640')
+    camera_bp.set_attribute('image_size_y', '480')
     camera_bp.set_attribute('fov', '105') # Field of view in degrees
     camera_bp.set_attribute('sensor_tick', '1.0') # Capture image every second
 

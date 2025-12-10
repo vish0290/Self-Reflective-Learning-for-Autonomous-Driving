@@ -54,6 +54,11 @@ def main():
     client = carla.Client('localhost', 2000)
     client.set_timeout(10.0)
     world = client.get_world()
+    # settings = world.get_settings()
+    # original_settings = world.get_settings()  # Save to restore later
+    # settings.synchronous_mode = True
+    # settings.fixed_delta_seconds = 0.05  # 20 Hz
+    # world.apply_settings(settings)
     carla_map = world.get_map()
     blueprint_library = world.get_blueprint_library()
     
@@ -90,32 +95,29 @@ def main():
     camera_bp = blueprint_library.find('sensor.camera.rgb')
     camera_bp.set_attribute('image_size_x', '800')
     camera_bp.set_attribute('image_size_y', '600')
-    camera_bp.set_attribute('fov', '90')
+    camera_bp.set_attribute('fov', '105')
     camera_bp.set_attribute('sensor_tick', '0.1')  # 10 FPS
 
     # Front camera
     front_transform = carla.Transform(
-        carla.Location(x=vehicle_extent.x + 0.5, y=0.0, z=vehicle_extent.z),
+        carla.Location(x=vehicle_extent.x + 0.5, y=0.0, z=vehicle_extent.z+1.0),
         carla.Rotation(pitch=-10.0, yaw=0.0, roll=0.0)
     )
     front_camera = world.spawn_actor(camera_bp, front_transform, attach_to=vehicle)
-    front_camera.listen(lambda image: image.save_to_disk(f'{output_dir}/front/{image.frame:06d}.png'))
 
     # Left camera
     left_transform = carla.Transform(
         carla.Location(x=0.0, y=-vehicle_extent.y - 0.2, z=vehicle_extent.z),
-        carla.Rotation(pitch=-10.0, yaw=-90.0, roll=0.0)
+        carla.Rotation(pitch=-10.0, yaw=90.0, roll=0.0)
     )
     left_camera = world.spawn_actor(camera_bp, left_transform, attach_to=vehicle)
-    left_camera.listen(lambda image: image.save_to_disk(f'{output_dir}/left/{image.frame:06d}.png'))
 
     # Right camera
     right_transform = carla.Transform(
         carla.Location(x=0.0, y=vehicle_extent.y + 0.2, z=vehicle_extent.z),
-        carla.Rotation(pitch=-10.0, yaw=90.0, roll=0.0)
+        carla.Rotation(pitch=-10.0, yaw=-90.0, roll=0.0)
     )
     right_camera = world.spawn_actor(camera_bp, right_transform, attach_to=vehicle)
-    right_camera.listen(lambda image: image.save_to_disk(f'{output_dir}/right/{image.frame:06d}.png'))
 
     # Rear camera
     rear_transform = carla.Transform(
@@ -123,7 +125,18 @@ def main():
         carla.Rotation(pitch=-10.0, yaw=180.0, roll=0.0)
     )
     rear_camera = world.spawn_actor(camera_bp, rear_transform, attach_to=vehicle)
-    rear_camera.listen(lambda image: image.save_to_disk(f'{output_dir}/rear/{image.frame:06d}.png'))
+    
+    camera_angles = {"front": front_camera, "left": left_camera, "right": right_camera, "rear": rear_camera}
+    for angle, cam in camera_angles.items():
+        print(f"{angle.capitalize()} camera spawned.")
+        if angle not in os.listdir(output_dir):
+            os.makedirs(f"{output_dir}/{angle}")
+        cam.listen(lambda image, angle=angle, output_dir=output_dir: image.save_to_disk(f'{output_dir}/{angle}/{image.frame}.png'))
+
+    # front_camera.listen(lambda image: image.save_to_disk(f'{output_dir}/front/{image.frame}.png'))
+    # left_camera.listen(lambda image: image.save_to_disk(f'{output_dir}/left/{image.frame}.png'))
+    # right_camera.listen(lambda image: image.save_to_disk(f'{output_dir}/right/{image.frame}.png'))
+    # rear_camera.listen(lambda image: image.save_to_disk(f'{output_dir}/rear/{image.frame}.png'))
 
     cameras = [front_camera, left_camera, right_camera, rear_camera]
     print("4 cameras attached: front, left, right, rear")
@@ -168,11 +181,15 @@ def main():
             
             # Record data every 10 frames
             if frame_count % 10 == 0:
+                snapshot = world.get_snapshot()
+                world_frame = snapshot.frame
+                
                 location = vehicle.get_location()
                 rotation = vehicle.get_transform().rotation
                 
                 frame_data = {
-                    "frame": frame_count,
+                    "frame": world_frame,  # Use world frame instead of frame_count
+                    "timestamp": snapshot.timestamp.elapsed_seconds,  # Optional: add timestamp
                     "speed_kmh": round(speed, 2),
                     "location": {
                         "x": round(location.x, 2), 
@@ -189,10 +206,10 @@ def main():
                     "brake": round(brake, 2)
                 }
                 episode_data.append(frame_data)
-                print(f"Frame {frame_count}: Speed={speed:.1f} km/h, Steering={steering:.2f}")
+                print(f"Frame {world_frame}: Speed={speed:.1f} km/h, Steering={steering:.2f}")
             
             frame_count += 1
-            time.sleep(0.05)  # 20 Hz
+            world.tick()  # Advance the simulation by one tick
 
         print("Done!")
 
@@ -205,6 +222,8 @@ def main():
             json.dump(episode_data, f, indent=2)
         print(f"Saved episode data to {output_dir}/episode.json")
         
+        # Restore original settings
+        world.apply_settings(original_settings)
         # Cleanup
         for camera in cameras:
             camera.stop()

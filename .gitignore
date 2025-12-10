@@ -3,3 +3,5 @@ data
 .DS_Store
 .vscode
 .idea
+images
+__pycache__
