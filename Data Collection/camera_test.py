@@ -104,13 +104,43 @@ def main():
             os.makedirs(f"images/{angle}")
         cam.listen(lambda image, angle=angle: image.save_to_disk(f'images/{angle}/{image.frame}.png'))
     
+    
+# Velocity & Speed
+    velocity = vehicle.get_velocity()  # m/s vector
+    speed_ms = (velocity.x**2 + velocity.y**2 + velocity.z**2)**0.5
+    speed_kmh = 3.6 * speed_ms
 
+    # Position & Rotation
+    transform = vehicle.get_transform()
+    location = transform.location  # x, y, z
+    rotation = transform.rotation  # pitch, yaw, roll
+
+    # Acceleration
+    acceleration = vehicle.get_acceleration()
+
+    # Angular velocity
+    angular_velocity = vehicle.get_angular_velocity()
+
+    # Control inputs (steering, throttle, brake)
+    control = vehicle.get_control()
+    print(f"Throttle: {control.throttle}, Steering: {control.steer}, Brake: {control.brake}")
 
     ############## RUN SIMULATION #################
 
     try:
         # Let the simulation run for 30 seconds
-        time.sleep(30)
+        start_time = time.time()
+        while time.time() - start_time < 30:
+            world.wait_for_tick()
+            
+            # Get vehicle metadata
+            velocity = vehicle.get_velocity()
+            speed_kmh = 3.6 * (velocity.x**2 + velocity.y**2 + velocity.z**2)**0.5
+            
+            location = vehicle.get_location()
+            transform = vehicle.get_transform()
+            
+            print(f"Speed: {speed_kmh:.2f} km/h | Location: ({location.x:.2f}, {location.y:.2f}, {location.z:.2f})")
     
     finally:
         # Clean up by destroying actors
