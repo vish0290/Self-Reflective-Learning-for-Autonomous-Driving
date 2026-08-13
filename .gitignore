@@ -3,6 +3,6 @@ data
 .DS_Store
 .vscode
 .idea
-
+datasets
 __pycache__
 

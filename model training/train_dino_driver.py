@@ -24,6 +24,12 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 from PIL import Image
 
+try:
+    import mlflow
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+
 # Add core/ to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 from dino_driver import (
@@ -150,6 +156,14 @@ def train(args):
     device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
     print(f"Device: {device}")
 
+    # MLflow
+    if args.mlflow and MLFLOW_AVAILABLE:
+        mlflow.set_tracking_uri(args.mlflow_uri)
+        mlflow.set_experiment(args.mlflow_experiment)
+        mlflow.start_run(run_name=args.mlflow_name or f"dino-{time.strftime('%Y%m%d_%H%M')}")
+        mlflow.log_params(vars(args))
+        print(f"MLflow tracking: {args.mlflow_uri}")
+
     # W&B
     wandb_run = None
     if args.wandb:
@@ -261,6 +275,14 @@ def train(args):
               f"val_traj={val_losses['loss_traj']:.5f} "
               f"lr={lr_now:.2e}")
 
+        # Log to MLflow
+        if args.mlflow and MLFLOW_AVAILABLE:
+            metrics = {f'train_{k}': v for k, v in epoch_losses.items()}
+            metrics.update({f'val_{k}': v for k, v in val_losses.items()})
+            metrics['lr'] = lr_now
+            mlflow.log_metrics(metrics, step=epoch)
+
+        # Log to W&B
         if wandb_run:
             import wandb
             log = {f'train/{k}': v for k, v in epoch_losses.items()}
@@ -284,6 +306,12 @@ def train(args):
     print(f"\nTraining complete. Best val_traj={best_val_traj:.5f}")
     print(f"Checkpoints in {out_dir}")
 
+    # Log final artifacts
+    if args.mlflow and MLFLOW_AVAILABLE:
+        mlflow.log_artifact(str(out_dir / 'best_heads.pt'))
+        mlflow.log_metric('best_val_traj', best_val_traj)
+        mlflow.end_run()
+
     if wandb_run:
         import wandb
         wandb.finish()
@@ -306,6 +334,11 @@ if __name__ == '__main__':
     parser.add_argument('--no-aux', dest='aux', action='store_false',
                         help='Disable auxiliary seg/depth losses')
     parser.add_argument('--resume', type=str, help='Resume from heads checkpoint')
+    parser.add_argument('--mlflow', action='store_true', help='Enable MLflow logging')
+    parser.add_argument('--mlflow-uri', type=str, default='./mlruns',
+                        help='MLflow tracking URI (default: ./mlruns)')
+    parser.add_argument('--mlflow-experiment', type=str, default='dino-driver')
+    parser.add_argument('--mlflow-name', type=str, default=None)
     parser.add_argument('--wandb', action='store_true', help='Enable W&B logging')
     parser.add_argument('--wandb-project', type=str, default='dino-driver')
     parser.add_argument('--wandb-name', type=str, default=None)
